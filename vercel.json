@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/get-numbers", "destination": "/api/get-numbers" },
+    { "source": "/api/get-messages", "destination": "/api/get-messages" }
+  ]
+}
