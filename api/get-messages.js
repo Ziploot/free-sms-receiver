@@ -1,5 +1,22 @@
 const https = require('https');
 
+function cleanMessage(text) {
+  // Remove starting serialized numbers if any (e.g. "1 ")
+  let cleaned = text.replace(/^\d\s+/, '');
+  
+  // Remove lookalike non-ASCII watermarks
+  cleaned = cleaned.split(/\s+/).filter(word => {
+    for (let i = 0; i < word.length; i++) {
+      if (word.charCodeAt(i) > 127 || word.charAt(i) === '⎩') {
+        return false;
+      }
+    }
+    return true;
+  }).join(' ');
+
+  return cleaned.replace(/\s+/g, ' ').trim();
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
@@ -11,81 +28,72 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: "Missing 'numberId' or 'number' query parameter." });
   }
 
-  // Session handler to get cookies and make Ajax request
-  const fetchSmsMessages = () => {
+  const scrapeMessages = () => {
     return new Promise((resolve) => {
-      // 1. Fetch main page to establish session/cookies
-      const options1 = {
-        hostname: 'sms-receive.net',
+      const options = {
+        hostname: 'temp-sms.org',
         port: 443,
-        path: `/${numberId}`,
+        path: `/sms/${number}`,
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
         },
-        timeout: 4000
+        timeout: 5000
       };
 
-      const req1 = https.get(options1, (res1) => {
-        const cookies = res1.headers['set-cookie'] || [];
-        const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
-        
-        // 2. Fetch AJAX JSON endpoint using cookies
-        const timestamp = Math.round(new Date().getTime() / 1000);
-        const options2 = {
-          hostname: 'sms-receive.net',
-          port: 443,
-          path: `/get_sms_register.php?phone=${number}`,
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer': `https://sms-receive.net/${numberId}`,
-            'Cookie': cookieStr,
-            'X-Alt-Data': timestamp.toString()
-          },
-          timeout: 4000
-        };
+      const request = https.get(options, (response) => {
+        if (response.statusCode !== 200) {
+          resolve(null);
+          return;
+        }
 
-        const req2 = https.get(options2, (res2) => {
-          let body = '';
-          res2.on('data', (chunk) => body += chunk);
-          res2.on('end', () => {
-            try {
-              const rawData = JSON.parse(body);
-              const messages = (rawData || []).map(msg => ({
-                sender: msg.telefon || 'Unknown',
-                text: msg.mesaj || '',
-                time: msg.data || 'Received'
-              }));
-              resolve({ status: 'ok', messages });
-            } catch (e) {
-              resolve({ status: 'parse_fail', error: e.message });
+        let body = '';
+        response.on('data', (chunk) => body += chunk);
+        response.on('end', () => {
+          try {
+            const messages = [];
+            // Parse message cards
+            const msgRegex = /col-sm-10 col-md-10 col-lg-10"[\s\S]*?<b>\+?([^<]+)<\/b>[\s\S]*?date-padding">([\s\S]*?)-\s*<span[\s\S]*?msg-padding">([\s\S]*?)<\/div>/g;
+            let match;
+            while ((match = msgRegex.exec(body)) !== null) {
+              const sender = match[1].trim();
+              const time = match[2].replace(/ago[\s\S]*/, 'ago').trim();
+              const rawText = match[3].trim();
+              const cleanText = cleanMessage(rawText);
+              
+              messages.push({
+                sender,
+                time,
+                text: cleanText
+              });
             }
-          });
+            resolve(messages);
+          } catch (e) {
+            resolve(null);
+          }
         });
-        req2.on('error', (e) => resolve({ status: 'error', error: e.message }));
-        req2.on('timeout', () => { req2.destroy(); resolve({ status: 'timeout' }); });
       });
-      req1.on('error', (e) => resolve({ status: 'error', error: e.message }));
-      req1.on('timeout', () => { req1.destroy(); resolve({ status: 'timeout' }); });
+      request.on('error', () => resolve(null));
+      request.on('timeout', () => {
+        request.destroy();
+        resolve(null);
+      });
     });
   };
 
-  const result = await fetchSmsMessages();
+  const result = await scrapeMessages();
 
-  if (result.status === 'ok') {
+  if (result) {
     return res.status(200).json({ 
-      messages: result.messages, 
+      messages: result, 
       source: 'live' 
     });
   } else {
     return res.status(200).json({ 
       messages: [], 
       source: 'unavailable',
-      viewOnline: `https://sms-receive.net/${numberId}`,
-      info: `Could not retrieve live messages: ${result.error || result.status}` 
+      viewOnline: `https://temp-sms.org/sms/${number}`,
+      info: 'Messages could not be retrieved from gateway. You can view them online.' 
     });
   }
 };
