@@ -1,9 +1,8 @@
 /* =======================================================
-   ZIPLOOT - SMS GATEWAY APP CONTROLLER
+   ZIPLOOT - SMS GATEWAY APP CONTROLLER (v2 - Real Numbers)
    ======================================================= */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize Lucide Icons
   lucide.createIcons();
 
   // DOM Elements
@@ -22,46 +21,50 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyActiveNumberBtn = document.getElementById('copy-active-number');
 
   let allNumbers = [];
-  let selectedNumber = null;
+  let selectedNum = null;
   let selectedCountry = 'all';
 
-  // Country Flags Map
   const flagMap = {
-    'US': '🇺🇸',
-    'GB': '🇬🇧',
-    'CA': '🇨🇦',
-    'DE': '🇩🇪',
-    'FR': '🇫🇷',
-    'SE': '🇸🇪',
-    'NL': '🇳🇱'
+    'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'DE': '🇩🇪',
+    'FR': '🇫🇷', 'SE': '🇸🇪', 'NL': '🇳🇱', 'PL': '🇵🇱'
   };
 
-  // Fetch Active Numbers from API
+  // Fetch REAL numbers from API
   async function fetchNumbers() {
     try {
+      numbersLoading.classList.remove('hidden');
+      numbersGrid.classList.add('hidden');
+
       const res = await fetch('/api/get-numbers');
       const data = await res.json();
-      
+
       allNumbers = data.numbers || [];
+      
+      if (allNumbers.length === 0 && data.error) {
+        numbersLoading.innerHTML = `<p style="color:#ef4444;"><i data-lucide="alert-triangle"></i> ${data.error}</p>`;
+        lucide.createIcons();
+        return;
+      }
+
       renderNumbers();
     } catch (e) {
-      console.error("Failed to load numbers: ", e);
+      console.error("Failed to load numbers:", e);
       numbersLoading.innerHTML = `<p style="color:#ef4444;"><i data-lucide="alert-triangle"></i> Network error. Please try again.</p>`;
       lucide.createIcons();
     }
   }
 
-  // Render Numbers list filtered by selected country
+  // Render number cards
   function renderNumbers() {
     numbersGrid.innerHTML = '';
-    
+
     const filtered = allNumbers.filter(n => {
       if (selectedCountry === 'all') return true;
       return n.country === selectedCountry;
     });
 
     if (filtered.length === 0) {
-      numbersGrid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:#94a3b8;">No active numbers available for this country.</div>`;
+      numbersGrid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#94a3b8;">No active numbers for this country.</div>`;
       numbersLoading.classList.add('hidden');
       numbersGrid.classList.remove('hidden');
       return;
@@ -69,7 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     filtered.forEach(num => {
       const card = document.createElement('div');
-      card.className = `number-card ${selectedNumber === num.number ? 'active' : ''}`;
+      const isActive = selectedNum && selectedNum.number === num.number;
+      card.className = `number-card ${isActive ? 'active' : ''}`;
       card.innerHTML = `
         <div class="card-meta">
           <span class="card-country">
@@ -92,11 +96,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     numbersLoading.classList.add('hidden');
     numbersGrid.classList.remove('hidden');
+    lucide.createIcons();
   }
 
-  // Select Active Number & Load Messages
+  // Select number & load messages
   function selectActiveNumber(num) {
-    selectedNumber = num.number;
+    selectedNum = num;
     activeFlag.textContent = flagMap[num.country] || '🌐';
     activeNumberText.textContent = num.formattedNumber || num.number;
 
@@ -106,16 +111,14 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchMessages();
   }
 
-  // Helper to Highlight OTP Codes in message text strings
+  // Highlight OTP codes
   function highlightOTPCodes(text) {
-    // Regex looking for 4 to 8 digit numerical codes (often labeled as code, pin, otp, verification, etc.)
-    const codeRegex = /\b\d{4,8}\b/g;
-    return text.replace(codeRegex, (match) => `<span class="otp-badge">${match}</span>`);
+    return text.replace(/\b\d{4,8}\b/g, (match) => `<span class="otp-badge">${match}</span>`);
   }
 
-  // Fetch Message Inbox for Selected Number
+  // Fetch messages for selected number
   async function fetchMessages() {
-    if (!selectedNumber) return;
+    if (!selectedNum) return;
 
     inboxDefault.classList.add('hidden');
     messagesContainer.classList.add('hidden');
@@ -123,36 +126,65 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshMessagesBtn.disabled = true;
 
     try {
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        const mockMsgs = [
-          { sender: "Google", time: "2 minutes ago", text: "G-483921 is your Google verification code. Do not share this code." },
-          { sender: "WhatsApp", time: "5 minutes ago", text: "Your WhatsApp verification code is: 8492. Or tap here to verify your device." },
-          { sender: "Discord", time: "12 minutes ago", text: "Your Discord security login code is 849202. Valid for 10 minutes." },
-          { sender: "Netflix", time: "25 minutes ago", text: "Your temporary Netflix access code is 483921. Please use this to verify your login." }
-        ];
-        renderMessages(mockMsgs);
-        return;
-      }
-
-      const res = await fetch(`/api/get-messages?number=${selectedNumber}`);
-      const data = await res.json();
+      const params = new URLSearchParams({
+        number: selectedNum.number,
+        numberId: selectedNum.numberId || '',
+        country: selectedNum.country || 'us'
+      });
       
-      renderMessages(data.messages || []);
+      const res = await fetch(`/api/get-messages?${params}`);
+      const data = await res.json();
+
+      if (data.messages && data.messages.length > 0) {
+        renderMessages(data.messages);
+      } else {
+        // Show "View Online" fallback with direct link
+        const viewUrl = data.viewOnline || selectedNum.messageUrl || 'https://www.receivesms.co/';
+        showViewOnline(viewUrl, data.info || '');
+      }
     } catch (e) {
-      console.error("Failed to load messages: ", e);
-      messagesLoading.innerHTML = `<p style="color:#ef4444;"><i data-lucide="alert-triangle"></i> Failed to retrieve inbox logs.</p>`;
-      lucide.createIcons();
+      console.error("Failed to load messages:", e);
+      const viewUrl = selectedNum.messageUrl || 'https://www.receivesms.co/';
+      showViewOnline(viewUrl, 'Network error fetching messages.');
     } finally {
       refreshMessagesBtn.disabled = false;
     }
   }
 
-  // Render Message elements list
+  // Show "View Online" fallback when scraping is blocked
+  function showViewOnline(url, info) {
+    messagesList.innerHTML = `
+      <div style="text-align:center; padding:40px 20px;">
+        <i data-lucide="external-link" style="width:48px;height:48px;color:#06b6d4;margin-bottom:16px;opacity:0.6;"></i>
+        <p style="color:#94a3b8;margin-bottom:8px;font-size:0.95rem;">${info || 'Messages are available on the source website.'}</p>
+        <p style="color:#64748b;margin-bottom:20px;font-size:0.85rem;">This number is real and active. Click below to view incoming SMS directly:</p>
+        <a href="${url}" target="_blank" rel="noopener" 
+           style="display:inline-block; background:linear-gradient(135deg,#06b6d4,#a855f7); color:#fff; 
+                  padding:12px 28px; border-radius:50px; font-weight:700; font-size:14px; 
+                  text-decoration:none; box-shadow:0 4px 15px rgba(6,182,212,0.4); transition:transform 0.2s;">
+          <i data-lucide="external-link" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></i>
+          VIEW MESSAGES ONLINE
+        </a>
+        <p style="color:#475569;margin-top:16px;font-size:0.8rem;">
+          Send your SMS to <strong>${selectedNum ? selectedNum.formattedNumber : 'the selected number'}</strong>, 
+          then click the button above to check delivery.
+        </p>
+      </div>
+    `;
+    messagesLoading.classList.add('hidden');
+    messagesContainer.classList.remove('hidden');
+    lucide.createIcons();
+  }
+
+  // Render real message cards
   function renderMessages(messages) {
     messagesList.innerHTML = '';
-    
+
     if (messages.length === 0) {
-      messagesList.innerHTML = `<div style="text-align:center; padding: 60px 20px; color:#94a3b8;"><i data-lucide="mail-warning" style="width:40px;height:40px;margin-bottom:12px;opacity:0.3;"></i><p>No SMS logs found. Send your verification code now and click Refresh.</p></div>`;
+      messagesList.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#94a3b8;">
+        <i data-lucide="mail-warning" style="width:40px;height:40px;margin-bottom:12px;opacity:0.3;"></i>
+        <p>No SMS logs found yet. Send a verification code and click Refresh.</p>
+      </div>`;
       messagesLoading.classList.add('hidden');
       messagesContainer.classList.remove('hidden');
       lucide.createIcons();
@@ -162,15 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
     messages.forEach(msg => {
       const card = document.createElement('div');
       card.className = 'message-card';
-      
-      const formattedText = highlightOTPCodes(msg.text);
-      
       card.innerHTML = `
         <div class="message-meta">
           <span class="message-sender">${msg.sender || 'Unknown'}</span>
-          <span>${msg.time || 'Received Just Now'}</span>
+          <span>${msg.time || 'Just now'}</span>
         </div>
-        <div class="message-text">${formattedText}</div>
+        <div class="message-text">${highlightOTPCodes(msg.text)}</div>
       `;
       messagesList.appendChild(card);
     });
@@ -179,72 +208,25 @@ document.addEventListener('DOMContentLoaded', () => {
     messagesContainer.classList.remove('hidden');
   }
 
-  // Filter Event
+  // Events
   countryFilter.addEventListener('change', (e) => {
     selectedCountry = e.target.value;
     renderNumbers();
   });
 
-  // Refresh Inbox Action
-  refreshMessagesBtn.addEventListener('click', () => {
-    fetchMessages();
-  });
+  refreshMessagesBtn.addEventListener('click', () => fetchMessages());
 
-  // Copy Active Number logic
   copyActiveNumberBtn.addEventListener('click', () => {
-    if (!selectedNumber) return;
-    
-    navigator.clipboard.writeText(selectedNumber).then(() => {
-      const originalHTML = copyActiveNumberBtn.innerHTML;
+    if (!selectedNum) return;
+    const numToCopy = selectedNum.formattedNumber || selectedNum.number;
+    navigator.clipboard.writeText(numToCopy).then(() => {
+      const orig = copyActiveNumberBtn.innerHTML;
       copyActiveNumberBtn.innerHTML = `<i data-lucide="check"></i> Copied!`;
       lucide.createIcons();
-      setTimeout(() => {
-        copyActiveNumberBtn.innerHTML = originalHTML;
-        lucide.createIcons();
-      }, 1500);
+      setTimeout(() => { copyActiveNumberBtn.innerHTML = orig; lucide.createIcons(); }, 1500);
     });
   });
 
-  // If localhost, directly render static elements to guarantee capture synchronicity
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    numbersLoading.classList.add('hidden');
-    numbersGrid.classList.remove('hidden');
-    allNumbers = [
-      { number: "18503838493", country: "US", countryName: "United States", formattedNumber: "+1 (850) 383-8493" },
-      { number: "447483928193", country: "GB", countryName: "United Kingdom", formattedNumber: "+44 7483 928193" },
-      { number: "16139281938", country: "CA", countryName: "Canada", formattedNumber: "+1 (613) 928-1938" },
-      { number: "4917639281938", country: "DE", countryName: "Germany", formattedNumber: "+49 176 39281938" },
-      { number: "33609382819", country: "FR", countryName: "France", formattedNumber: "+33 6 0938 2819" },
-      { number: "46709382819", country: "SE", countryName: "Sweden", formattedNumber: "+46 70 938 2819" }
-    ];
-    renderNumbers();
-    
-    // Select first card immediately
-    const firstNum = allNumbers[0];
-    selectedNumber = firstNum.number;
-    activeFlag.textContent = flagMap[firstNum.country] || '🌐';
-    activeNumberText.textContent = firstNum.formattedNumber || firstNum.number;
-    refreshMessagesBtn.classList.remove('hidden');
-    refreshMessagesBtn.disabled = false;
-    
-    inboxDefault.classList.add('hidden');
-    messagesLoading.classList.add('hidden');
-    messagesContainer.classList.remove('hidden');
-    const mockMsgs = [
-      { sender: "Google", time: "2 minutes ago", text: "G-483921 is your Google verification code. Do not share this code." },
-      { sender: "WhatsApp", time: "5 minutes ago", text: "Your WhatsApp verification code is: 8492. Or tap here to verify your device." },
-      { sender: "Discord", time: "12 minutes ago", text: "Your Discord security login code is 849202. Valid for 10 minutes." },
-      { sender: "Netflix", time: "25 minutes ago", text: "Your temporary Netflix access code is 483921. Please use this to verify your login." }
-    ];
-    renderMessages(mockMsgs);
-    
-    // Set active class on DOM card
-    setTimeout(() => {
-      const firstDOMCard = document.querySelector('.number-card');
-      if (firstDOMCard) firstDOMCard.classList.add('active');
-    }, 100);
-  } else {
-    // Start initialization for Vercel production
-    fetchNumbers();
-  }
+  // Start
+  fetchNumbers();
 });
