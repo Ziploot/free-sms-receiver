@@ -48,6 +48,15 @@ module.exports = async (req, res) => {
               else if (rawNum.startsWith('33')) { country = 'FR'; countryName = 'France'; }
               else if (rawNum.startsWith('358')) { country = 'FI'; countryName = 'Finland'; }
               else if (rawNum.startsWith('91')) { country = 'IN'; countryName = 'India'; }
+              else if (rawNum.startsWith('61')) { country = 'AU'; countryName = 'Australia'; }
+              else if (rawNum.startsWith('7')) { country = 'RU'; countryName = 'Russia'; }
+              else if (rawNum.startsWith('32')) { country = 'BE'; countryName = 'Belgium'; }
+              else if (rawNum.startsWith('380')) { country = 'UA'; countryName = 'Ukraine'; }
+              else if (rawNum.startsWith('372')) { country = 'EE'; countryName = 'Estonia'; }
+              else if (rawNum.startsWith('385')) { country = 'HR'; countryName = 'Croatia'; }
+              else if (rawNum.startsWith('43')) { country = 'AT'; countryName = 'Austria'; }
+              else if (rawNum.startsWith('60')) { country = 'MY'; countryName = 'Malaysia'; }
+              else if (rawNum.startsWith('62')) { country = 'ID'; countryName = 'Indonesia'; }
               
               numbers.push({
                 number: rawNum,
