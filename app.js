@@ -135,16 +135,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`/api/get-messages?${params}`);
       const data = await res.json();
 
-      if (data.messages && data.messages.length > 0) {
-        renderMessages(data.messages);
+      if (data.source === 'live') {
+        renderMessages(data.messages || []);
       } else {
         // Show "View Online" fallback with direct link
-        const viewUrl = data.viewOnline || selectedNum.messageUrl || 'https://www.receivesms.co/';
+        const viewUrl = data.viewOnline || selectedNum.messageUrl || 'https://sms-receive.net/';
         showViewOnline(viewUrl, data.info || '');
       }
     } catch (e) {
       console.error("Failed to load messages:", e);
-      const viewUrl = selectedNum.messageUrl || 'https://www.receivesms.co/';
+      const viewUrl = selectedNum.messageUrl || 'https://sms-receive.net/';
       showViewOnline(viewUrl, 'Network error fetching messages.');
     } finally {
       refreshMessagesBtn.disabled = false;
