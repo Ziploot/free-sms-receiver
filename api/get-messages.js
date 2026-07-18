@@ -59,6 +59,12 @@ module.exports = async (req, res) => {
               const sender = match[1].trim();
               const time = match[2].replace(/ago[\s\S]*/, 'ago').trim();
               const rawText = match[3].trim();
+              
+              // Skip JavaScript templates
+              if (sender.includes('value.') || rawText.includes('value.') || rawText.includes("'+")) {
+                continue;
+              }
+              
               const cleanText = cleanMessage(rawText);
               
               messages.push({
