@@ -30,6 +30,7 @@ module.exports = async (req, res) => {
         response.on('end', () => {
           try {
             const numbers = [];
+            // Target the specific group-hover:text-violet-600 color class that contains the phone number
             const cardRegex = /href="(\d+)-([A-Za-z]+)"[\s\S]*?alt="([^"]*)"[\s\S]*?group-hover:text-violet-600[^>]*>\s*\+?(\d+)/g;
             let match;
             while ((match = cardRegex.exec(body)) !== null) {
@@ -74,6 +75,6 @@ module.exports = async (req, res) => {
   if (result && result.length > 0) {
     return res.status(200).json({ numbers: result, source: 'live' });
   } else {
-    return res.status(502).json({ error: "Failed to load active numbers. Please try again later." });
+    return res.status(200).json({ numbers: [], source: 'error', error: "Failed to scrape numbers from gateway." });
   }
 };
