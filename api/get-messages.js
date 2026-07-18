@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
       const options = {
         hostname: 'temp-sms.org',
         port: 443,
-        path: `/sms/${number}`,
+        path: `/sms/${numberId}`,
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -98,7 +98,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ 
       messages: [], 
       source: 'unavailable',
-      viewOnline: `https://temp-sms.org/sms/${number}`,
+      viewOnline: `https://temp-sms.org/sms/${numberId}`,
       info: 'Messages could not be retrieved from gateway. You can view them online.' 
     });
   }
