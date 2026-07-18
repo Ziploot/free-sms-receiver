@@ -6,7 +6,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
 
   const options = {
-    hostname: 'sms-receive.net',
+    hostname: 'temp-sms.org',
     port: 443,
     path: '/',
     method: 'GET',
@@ -30,30 +30,32 @@ module.exports = async (req, res) => {
         response.on('end', () => {
           try {
             const numbers = [];
-            // Target the specific group-hover:text-violet-600 color class that contains the phone number
-            const cardRegex = /href="(\d+)-([A-Za-z]+)"[\s\S]*?alt="([^"]*)"[\s\S]*?group-hover:text-violet-600[^>]*>\s*\+?(\d+)/g;
+            const cardRegex = /href="\/sms\/(\d+)"[^>]*>[\s\S]*?<h3[^>]*>\s*\+?([^<]+)\s*<\/h3>/g;
             let match;
             while ((match = cardRegex.exec(body)) !== null) {
-              const pathId = `${match[1]}-${match[2]}`;
-              const countryName = match[3].trim();
-              const rawNum = match[4].trim();
+              const rawNum = match[1];
+              const formattedNum = match[2].trim();
               
-              let countryCode = 'US';
-              const lowerC = countryName.toLowerCase();
-              if (lowerC.includes('united kingdom') || lowerC.includes('uk')) countryCode = 'GB';
-              else if (lowerC.includes('canada')) countryCode = 'CA';
-              else if (lowerC.includes('sweden')) countryCode = 'SE';
-              else if (lowerC.includes('france')) countryCode = 'FR';
-              else if (lowerC.includes('netherlands')) countryCode = 'NL';
-              else if (lowerC.includes('germany')) countryCode = 'DE';
+              // Map country code based on prefix
+              let country = 'US';
+              let countryName = 'United States';
+              
+              if (rawNum.startsWith('44')) { country = 'GB'; countryName = 'United Kingdom'; }
+              else if (rawNum.startsWith('1')) { country = 'US'; countryName = 'United States'; }
+              else if (rawNum.startsWith('64')) { country = 'NZ'; countryName = 'New Zealand'; }
+              else if (rawNum.startsWith('46')) { country = 'SE'; countryName = 'Sweden'; }
+              else if (rawNum.startsWith('31')) { country = 'NL'; countryName = 'Netherlands'; }
+              else if (rawNum.startsWith('33')) { country = 'FR'; countryName = 'France'; }
+              else if (rawNum.startsWith('358')) { country = 'FI'; countryName = 'Finland'; }
+              else if (rawNum.startsWith('91')) { country = 'IN'; countryName = 'India'; }
               
               numbers.push({
                 number: rawNum,
-                numberId: pathId,
-                country: countryCode,
+                numberId: rawNum,
+                country: country,
                 countryName: countryName,
-                formattedNumber: `+${rawNum}`,
-                messageUrl: `https://sms-receive.net/${pathId}`
+                formattedNumber: formattedNum,
+                messageUrl: `https://temp-sms.org/sms/${rawNum}`
               });
             }
             resolve(numbers);
