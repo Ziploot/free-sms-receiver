@@ -31,15 +31,11 @@ function scrapeCountryPage(source) {
       res.on('end', () => {
         try {
           const numbers = [];
-          // Match links like: <a href="/us-phone-number/20693/">+1 219-295-8005</a>
-          // or: href="/us-phone-number/21815/"
-          const linkRegex = /href="\/[a-z\-]+-phone-number\/(\d+)\/"[^>]*>([^<]+)</g;
+          const linkRegex = /href="\/[a-z\-]+-phone-number\/(\d+)\/"[\s\S]*?<strong>([^<]+)<\/strong>/g;
           let match;
           while ((match = linkRegex.exec(body)) !== null) {
             const id = match[1];
             const rawNumber = match[2].trim();
-            // Skip non-number text
-            if (!/^\+?\d/.test(rawNumber)) continue;
             
             const cleanNumber = rawNumber.replace(/[\s\-\(\)]/g, '').replace(/^\+/, '');
             
