@@ -27,7 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const flagMap = {
     'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'DE': '🇩🇪',
     'FR': '🇫🇷', 'SE': '🇸🇪', 'NL': '🇳🇱', 'PL': '🇵🇱',
-    'FI': '🇫🇮', 'NZ': '🇳🇿', 'IN': '🇮🇳'
+    'FI': '🇫🇮', 'NZ': '🇳🇿', 'IN': '🇮🇳',
+    'AU': '🇦🇺', 'RU': '🇷🇺', 'BE': '🇧🇪', 'EE': '🇪🇪',
+    'UA': '🇺🇦', 'HR': '🇭🇷', 'AT': '🇦🇹', 'MY': '🇲🇾',
+    'ID': '🇮🇩'
   };
 
   // Fetch REAL numbers from API
