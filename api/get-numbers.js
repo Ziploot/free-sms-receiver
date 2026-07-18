@@ -1,89 +1,79 @@
 const https = require('https');
 
-// Scrape REAL active numbers from receivesms.co
-const SOURCES = [
-  { url: '/us-phone-numbers/us/', country: 'US', countryName: 'United States' },
-  { url: '/british-phone-numbers/gb/', country: 'GB', countryName: 'United Kingdom' },
-  { url: '/canadian-phone-numbers/ca/', country: 'CA', countryName: 'Canada' },
-  { url: '/swedish-phone-numbers/se/', country: 'SE', countryName: 'Sweden' },
-  { url: '/dutch-phone-numbers/nl/', country: 'NL', countryName: 'Netherlands' },
-  { url: '/french-phone-numbers/fr/', country: 'FR', countryName: 'France' }
-];
-
-function scrapeCountryPage(source) {
-  return new Promise((resolve) => {
-    const options = {
-      hostname: 'www.receivesms.co',
-      port: 443,
-      path: source.url,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
-      },
-      timeout: 6000
-    };
-
-    const req = https.get(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        try {
-          const numbers = [];
-          const linkRegex = /href="\/[a-z\-]+-phone-number\/(\d+)\/"[\s\S]*?<strong>([^<]+)<\/strong>/g;
-          let match;
-          while ((match = linkRegex.exec(body)) !== null) {
-            const id = match[1];
-            const rawNumber = match[2].trim();
-            
-            const cleanNumber = rawNumber.replace(/[\s\-\(\)]/g, '').replace(/^\+/, '');
-            
-            numbers.push({
-              number: cleanNumber,
-              numberId: id,
-              country: source.country,
-              countryName: source.countryName,
-              formattedNumber: rawNumber,
-              messageUrl: `https://www.receivesms.co/${source.country.toLowerCase()}-phone-number/${id}/`
-            });
-          }
-          resolve(numbers.slice(0, 5)); // Take first 5 per country
-        } catch (e) {
-          resolve([]);
-        }
-      });
-    });
-    req.on('error', () => resolve([]));
-    req.on('timeout', () => { req.destroy(); resolve([]); });
-  });
-}
-
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=300');
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
 
-  try {
-    // Scrape all country pages in parallel
-    const results = await Promise.all(SOURCES.map(s => scrapeCountryPage(s)));
-    const allNumbers = results.flat();
+  const options = {
+    hostname: 'sms-receive.net',
+    port: 443,
+    path: '/',
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    },
+    timeout: 5000
+  };
 
-    if (allNumbers.length > 0) {
-      return res.status(200).json({ 
-        numbers: allNumbers, 
-        source: 'live',
-        count: allNumbers.length 
+  const scrapeNumbers = () => {
+    return new Promise((resolve) => {
+      const request = https.get(options, (response) => {
+        if (response.statusCode !== 200) {
+          resolve(null);
+          return;
+        }
+
+        let body = '';
+        response.on('data', (chunk) => body += chunk);
+        response.on('end', () => {
+          try {
+            const numbers = [];
+            const cardRegex = /href="(\d+)-([A-Za-z]+)"[\s\S]*?alt="([^"]*)"[\s\S]*?group-hover:text-violet-600[^>]*>\s*\+?(\d+)/g;
+            let match;
+            while ((match = cardRegex.exec(body)) !== null) {
+              const pathId = `${match[1]}-${match[2]}`;
+              const countryName = match[3].trim();
+              const rawNum = match[4].trim();
+              
+              let countryCode = 'US';
+              const lowerC = countryName.toLowerCase();
+              if (lowerC.includes('united kingdom') || lowerC.includes('uk')) countryCode = 'GB';
+              else if (lowerC.includes('canada')) countryCode = 'CA';
+              else if (lowerC.includes('sweden')) countryCode = 'SE';
+              else if (lowerC.includes('france')) countryCode = 'FR';
+              else if (lowerC.includes('netherlands')) countryCode = 'NL';
+              else if (lowerC.includes('germany')) countryCode = 'DE';
+              
+              numbers.push({
+                number: rawNum,
+                numberId: pathId,
+                country: countryCode,
+                countryName: countryName,
+                formattedNumber: `+${rawNum}`,
+                messageUrl: `https://sms-receive.net/${pathId}`
+              });
+            }
+            resolve(numbers);
+          } catch (e) {
+            resolve(null);
+          }
+        });
       });
-    }
-  } catch (e) {
-    // Fall through to fallback
-  }
+      request.on('error', () => resolve(null));
+      request.on('timeout', () => {
+        request.destroy();
+        resolve(null);
+      });
+    });
+  };
 
-  // If scraping completely fails, return error so frontend knows
-  return res.status(200).json({ 
-    numbers: [], 
-    source: 'error',
-    error: 'Could not fetch live numbers. Please try again later.' 
-  });
+  const result = await scrapeNumbers();
+  
+  if (result && result.length > 0) {
+    return res.status(200).json({ numbers: result, source: 'live' });
+  } else {
+    return res.status(502).json({ error: "Failed to load active numbers. Please try again later." });
+  }
 };
